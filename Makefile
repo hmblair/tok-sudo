@@ -3,12 +3,14 @@ BINDIR    ?= $(PREFIX)/bin
 SUDOERS_D ?= /etc/sudoers.d
 HASH_FILE ?= /etc/tok-sudo-token-hash
 SCRIPTS   := tok-sudo tok-sudo-exec tok-sudo-rotate
+VERSION   := $(shell git describe --tags --always 2>/dev/null || echo unknown)
 
 .PHONY: install uninstall
 
 install:
 	@for s in $(SCRIPTS); do \
-		sudo cp $$s $(BINDIR)/$$s && \
+		sudo sed 's/@VERSION@/$(VERSION)/g' $$s > /tmp/tok-sudo-$$s && \
+		sudo mv /tmp/tok-sudo-$$s $(BINDIR)/$$s && \
 		sudo chmod 755 $(BINDIR)/$$s; \
 	done
 	@echo '$(shell id -un) ALL=(root) NOPASSWD: $(BINDIR)/tok-sudo-exec *' \

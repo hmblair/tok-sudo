@@ -7,27 +7,60 @@ set -euo pipefail
 
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
+# ─────────────────────────────────────────────────────────────────────────────
+# ANSI colour tokens
+
+RED='\033[0;31m'
+YELLOW='\033[0;33m'
+NC='\033[0m'
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Output helpers
+
+error() {
+    echo -e "${RED}Error:${NC} $1" >&2
+    exit 1
+}
+
+warn() {
+    echo -e "${YELLOW}Warning:${NC} $1" >&2
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+
 HASH_FILE="/etc/tok-sudo-token-hash"
 
-[[ $# -ge 1 ]] || { echo "tok-sudo-exec: missing arguments" >&2; exit 1; }
+sha256() { echo -n "$1" | { sha256sum 2>/dev/null || shasum -a 256; } | cut -d' ' -f1; }
+
+file_owner_uid() {
+    stat -c %u "$1" 2>/dev/null || stat -f %u "$1"
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+
+[[ $# -ge 1 ]] || error "missing arguments"
+
+if [[ -t 0 ]]; then
+    error "tok-sudo-exec is an internal command. Use tok-sudo instead."
+fi
 
 read -r PROVIDED_HASH
 
-[[ -n "$PROVIDED_HASH" ]] || { echo "tok-sudo: empty token" >&2; exit 1; }
+[[ -n "$PROVIDED_HASH" ]] || error "empty token"
 
-EXPECTED_HASH=$(cat "$HASH_FILE" 2>/dev/null) || {
-    echo "tok-sudo: token not configured. Run: sudo tok-sudo-rotate" >&2
-    exit 1
-}
+[[ -f "$HASH_FILE" ]] || error "token not configured. Run: sudo tok-sudo-rotate"
 
-[[ -n "$EXPECTED_HASH" ]] || {
-    echo "tok-sudo: token not configured. Run: sudo tok-sudo-rotate" >&2
-    exit 1
-}
+[[ "$(file_owner_uid "$HASH_FILE")" == "0" ]] || error "$HASH_FILE is not owned by root"
 
-if [[ "$PROVIDED_HASH" == "$EXPECTED_HASH" ]]; then
+EXPECTED_HASH=$(cat "$HASH_FILE" 2>/dev/null) || error "token not configured. Run: sudo tok-sudo-rotate"
+
+[[ -n "$EXPECTED_HASH" ]] || error "token not configured. Run: sudo tok-sudo-rotate"
+
+# Timing-safe comparison: re-hash both values with a random nonce so that
+# the final string comparison leaks no information about the actual hashes.
+NONCE=$(head -c 16 /dev/urandom | od -A n -t x1 | tr -d ' \n')
+if [[ "$(sha256 "${NONCE}${PROVIDED_HASH}")" == "$(sha256 "${NONCE}${EXPECTED_HASH}")" ]]; then
     exec "$@"
 else
-    echo "tok-sudo: invalid token" >&2
-    exit 1
+    error "invalid token"
 fi

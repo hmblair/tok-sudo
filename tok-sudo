@@ -19,11 +19,22 @@ error() {
 
 # ─────────────────────────────────────────────────────────────────────────────
 
+VERSION="@VERSION@"
+
 usage() {
+    echo -e "${BOLD}tok-sudo${NC} — token-gated sudo wrapper"
+    echo -e ""
     echo -e "${BOLD}Usage:${NC}"
     echo -e "  TOK_SUDO_TOKEN=<token> tok-sudo <command...>"
+    echo -e ""
+    echo -e "${BOLD}Options:${NC}"
+    echo -e "  -h, --help       Show this help message"
+    echo -e "  -v, --version    Show version"
     exit "${1:-0}"
 }
+
+[[ "${1:-}" != "--help" && "${1:-}" != "-h" ]]    || usage 0
+[[ "${1:-}" != "--version" && "${1:-}" != "-v" ]] || { echo "tok-sudo $VERSION"; exit 0; }
 
 [[ -n "${TOK_SUDO_TOKEN:-}" ]] || usage 1
 [[ $# -ge 1 ]]                || usage 1
