@@ -207,21 +207,21 @@ assert_exec_fails "token not configured" "exec: hash file missing"
 
 # B5: hash file not owned by root
 echo "fakehash" > "$HASH_FILE"
-chown 65534 "$HASH_FILE"
+chown nobody "$HASH_FILE" 2>/dev/null || chown 65534 "$HASH_FILE"
 chmod 600 "$HASH_FILE"
 run_exec "somehash" echo hi
 assert_exec_fails "not owned by root" "exec: hash file not owned by root"
 
 # B6: hash file empty
 : > "$HASH_FILE"
-chown root:root "$HASH_FILE"
+chown 0:0 "$HASH_FILE"
 chmod 600 "$HASH_FILE"
 run_exec "somehash" echo hi
 assert_exec_fails "token not configured" "exec: hash file empty"
 
 # B7: wrong hash rejected
 echo "correcthash" > "$HASH_FILE"
-chown root:root "$HASH_FILE"
+chown 0:0 "$HASH_FILE"
 chmod 600 "$HASH_FILE"
 run_exec "wronghash" echo hi
 assert_exec_fails "invalid token" "exec: wrong hash rejected"
@@ -230,7 +230,7 @@ assert_exec_fails "invalid token" "exec: wrong hash rejected"
 TEST_TOKEN="testtoken123"
 TEST_HASH=$(sha256 "$TEST_TOKEN")
 echo "$TEST_HASH" > "$HASH_FILE"
-chown root:root "$HASH_FILE"
+chown 0:0 "$HASH_FILE"
 chmod 600 "$HASH_FILE"
 run_exec "$TEST_HASH" echo hi
 assert_exec_succeeds "exec: correct hash accepted"
@@ -252,7 +252,7 @@ fi
 # B10: symlinked hash file rejected (even if target is root-owned)
 SYMLINK_TARGET=$(mktemp)
 echo "$TEST_HASH" > "$SYMLINK_TARGET"
-chown root:root "$SYMLINK_TARGET"
+chown 0:0 "$SYMLINK_TARGET"
 chmod 600 "$SYMLINK_TARGET"
 rm -f "$HASH_FILE"
 ln -s "$SYMLINK_TARGET" "$HASH_FILE"
@@ -271,12 +271,12 @@ assert_exec_fails "symlink" "exec: symlinked hash file (non-root target)"
 rm -f "$HASH_FILE" "$SYMLINK_TARGET"
 # Restore a valid hash file for subsequent tests
 echo "$TEST_HASH" > "$HASH_FILE"
-chown root:root "$HASH_FILE"
+chown 0:0 "$HASH_FILE"
 chmod 600 "$HASH_FILE"
 
 # B12: hash file with trailing whitespace / extra lines
 printf '%s \n\nextra\n' "$TEST_HASH" > "$HASH_FILE"
-chown root:root "$HASH_FILE"
+chown 0:0 "$HASH_FILE"
 chmod 600 "$HASH_FILE"
 run_exec "$TEST_HASH" echo hi
 # cat + command substitution strips trailing newlines, but the leading line
@@ -288,7 +288,7 @@ else
 fi
 # Restore clean hash file
 echo "$TEST_HASH" > "$HASH_FILE"
-chown root:root "$HASH_FILE"
+chown 0:0 "$HASH_FILE"
 chmod 600 "$HASH_FILE"
 
 # B13: nonexistent command
@@ -301,7 +301,7 @@ fi
 
 # B14: world-readable hash file rejected
 echo "$TEST_HASH" > "$HASH_FILE"
-chown root:root "$HASH_FILE"
+chown 0:0 "$HASH_FILE"
 chmod 644 "$HASH_FILE"
 run_exec "$TEST_HASH" echo hi
 assert_exec_fails "accessible to non-root" "exec: world-readable hash file rejected"
@@ -456,7 +456,7 @@ fi
 NASTY_TOKEN='$HOME $(whoami) `id`'
 NASTY_HASH=$(sha256 "$NASTY_TOKEN")
 echo "$NASTY_HASH" > "$HASH_FILE"
-chown root:root "$HASH_FILE"
+chown 0:0 "$HASH_FILE"
 chmod 600 "$HASH_FILE"
 out=$(sudo -u "$REAL_USER" env "TOK_SUDO_TOKEN=$NASTY_TOKEN" "$CLI" echo safe 2>&1); rc=$?
 if [[ $rc -eq 0 ]] && echo "$out" | grep -q "safe"; then
