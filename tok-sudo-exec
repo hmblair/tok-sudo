@@ -64,6 +64,8 @@ EXPECTED_HASH=$(cat "$HASH_FILE" 2>/dev/null) || error "token not configured. Ru
 
 [[ -n "$EXPECTED_HASH" ]] || error "token not configured. Run: sudo tok-sudo-rotate"
 
+[[ "$EXPECTED_HASH" =~ ^[a-f0-9]{64}$ ]] || error "token hash is malformed"
+
 # Timing-safe comparison: re-hash both values with a random nonce so that
 # the final string comparison leaks no information about the actual hashes.
 NONCE=$(head -c 16 /dev/urandom | od -A n -t x1 | tr -d ' \n')
