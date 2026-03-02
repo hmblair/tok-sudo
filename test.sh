@@ -249,6 +249,70 @@ else
     fail "exec: multi-arg stdout" "expected 'hello world', got '$LAST_STDOUT'"
 fi
 
+# B10: symlinked hash file rejected (even if target is root-owned)
+SYMLINK_TARGET=$(mktemp)
+echo "$TEST_HASH" > "$SYMLINK_TARGET"
+chown root:root "$SYMLINK_TARGET"
+chmod 600 "$SYMLINK_TARGET"
+rm -f "$HASH_FILE"
+ln -s "$SYMLINK_TARGET" "$HASH_FILE"
+run_exec "$TEST_HASH" echo hi
+assert_exec_fails "symlink" "exec: symlinked hash file (root-owned target)"
+rm -f "$HASH_FILE" "$SYMLINK_TARGET"
+
+# B11: symlinked hash file to non-root owner rejected
+SYMLINK_TARGET=$(mktemp -p /tmp)
+echo "$TEST_HASH" > "$SYMLINK_TARGET"
+chown 65534 "$SYMLINK_TARGET"
+chmod 644 "$SYMLINK_TARGET"
+ln -s "$SYMLINK_TARGET" "$HASH_FILE"
+run_exec "$TEST_HASH" echo hi
+assert_exec_fails "symlink" "exec: symlinked hash file (non-root target)"
+rm -f "$HASH_FILE" "$SYMLINK_TARGET"
+# Restore a valid hash file for subsequent tests
+echo "$TEST_HASH" > "$HASH_FILE"
+chown root:root "$HASH_FILE"
+chmod 600 "$HASH_FILE"
+
+# B12: hash file with trailing whitespace / extra lines
+printf '%s \n\nextra\n' "$TEST_HASH" > "$HASH_FILE"
+chown root:root "$HASH_FILE"
+chmod 600 "$HASH_FILE"
+run_exec "$TEST_HASH" echo hi
+# cat + command substitution strips trailing newlines, but the leading line
+# will include the hash plus a trailing space. This should NOT match.
+if [[ "$LAST_RC" -ne 0 ]]; then
+    pass "exec: hash file with trailing whitespace rejected"
+else
+    fail "exec: hash file with trailing whitespace rejected" "expected failure, got success"
+fi
+# Restore clean hash file
+echo "$TEST_HASH" > "$HASH_FILE"
+chown root:root "$HASH_FILE"
+chmod 600 "$HASH_FILE"
+
+# B13: nonexistent command
+run_exec "$TEST_HASH" /usr/bin/this-command-does-not-exist-xyz
+if [[ "$LAST_RC" -ne 0 ]]; then
+    pass "exec: nonexistent command fails"
+else
+    fail "exec: nonexistent command fails" "expected non-zero exit"
+fi
+
+# B14: exit code propagation
+run_exec "$TEST_HASH" true
+if [[ "$LAST_RC" -eq 0 ]]; then
+    pass "exec: exit code 0 from true"
+else
+    fail "exec: exit code 0 from true" "got $LAST_RC"
+fi
+run_exec "$TEST_HASH" false
+if [[ "$LAST_RC" -eq 1 ]]; then
+    pass "exec: exit code 1 from false"
+else
+    fail "exec: exit code 1 from false" "got $LAST_RC"
+fi
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Section C: tok-sudo-rotate
 # ══════════════════════════════════════════════════════════════════════════════
@@ -349,6 +413,52 @@ if [[ $rc -eq 0 ]] && echo "$out" | grep -q "should-pass"; then
     pass "e2e: new token works after rotate"
 else
     fail "e2e: new token works after rotate" "rc=$rc, out=$(echo "$out" | strip_ansi)"
+fi
+
+# D4: exit code propagation through tok-sudo
+out=$(sudo -u "$REAL_USER" env "TOK_SUDO_TOKEN=$TOKEN_D2" "$CLI" true 2>&1); rc=$?
+if [[ $rc -eq 0 ]]; then
+    pass "e2e: exit code 0 propagates"
+else
+    fail "e2e: exit code 0 propagates" "got $rc"
+fi
+out=$(sudo -u "$REAL_USER" env "TOK_SUDO_TOKEN=$TOKEN_D2" "$CLI" false 2>&1); rc=$?
+if [[ $rc -eq 1 ]]; then
+    pass "e2e: exit code 1 propagates"
+else
+    fail "e2e: exit code 1 propagates" "got $rc"
+fi
+
+# D5: command with special characters in arguments
+out=$(sudo -u "$REAL_USER" env "TOK_SUDO_TOKEN=$TOKEN_D2" "$CLI" sh -c 'echo "hello world"' 2>&1); rc=$?
+if [[ $rc -eq 0 ]] && echo "$out" | grep -q "hello world"; then
+    pass "e2e: sh -c with quoted args"
+else
+    fail "e2e: sh -c with quoted args" "rc=$rc, out=$(echo "$out" | strip_ansi)"
+fi
+
+# D6: token with shell metacharacters
+# Set up a hash file for a token containing $, backticks, and spaces
+NASTY_TOKEN='$HOME $(whoami) `id`'
+NASTY_HASH=$(sha256 "$NASTY_TOKEN")
+echo "$NASTY_HASH" > "$HASH_FILE"
+chown root:root "$HASH_FILE"
+chmod 600 "$HASH_FILE"
+out=$(sudo -u "$REAL_USER" env "TOK_SUDO_TOKEN=$NASTY_TOKEN" "$CLI" echo safe 2>&1); rc=$?
+if [[ $rc -eq 0 ]] && echo "$out" | grep -q "safe"; then
+    pass "e2e: token with shell metacharacters"
+else
+    fail "e2e: token with shell metacharacters" "rc=$rc, out=$(echo "$out" | strip_ansi)"
+fi
+
+# D7: nonexistent command through tok-sudo
+raw=$("$ROTATE" 2>&1)
+TOKEN_D7=$(echo "$raw" | strip_ansi | grep -o '[a-zA-Z0-9]\{32\}$')
+out=$(sudo -u "$REAL_USER" env "TOK_SUDO_TOKEN=$TOKEN_D7" "$CLI" /usr/bin/this-does-not-exist-xyz 2>&1); rc=$?
+if [[ $rc -ne 0 ]]; then
+    pass "e2e: nonexistent command fails"
+else
+    fail "e2e: nonexistent command fails" "expected non-zero exit"
 fi
 
 # (EXIT trap fires: rotates fresh token, prints summary)

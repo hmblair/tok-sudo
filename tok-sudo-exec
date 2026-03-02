@@ -50,6 +50,8 @@ read -r PROVIDED_HASH
 
 [[ -f "$HASH_FILE" ]] || error "token not configured. Run: sudo tok-sudo-rotate"
 
+[[ ! -L "$HASH_FILE" ]] || error "$HASH_FILE is a symlink"
+
 [[ "$(file_owner_uid "$HASH_FILE")" == "0" ]] || error "$HASH_FILE is not owned by root"
 
 EXPECTED_HASH=$(cat "$HASH_FILE" 2>/dev/null) || error "token not configured. Run: sudo tok-sudo-rotate"

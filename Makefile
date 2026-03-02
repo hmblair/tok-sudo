@@ -14,7 +14,7 @@ install:
 		sudo mv /tmp/tok-sudo-$$s $(BINDIR)/$$s && \
 		sudo chmod 755 $(BINDIR)/$$s; \
 	done
-	@echo '$(shell id -un) ALL=(root) NOPASSWD: $(BINDIR)/tok-sudo-exec *' \
+	@echo "$${SUDO_USER:-$(shell id -un)} ALL=(root) NOPASSWD: $(BINDIR)/tok-sudo-exec *" \
 		| sudo EDITOR='tee' visudo -f $(SUDOERS_D)/tok-sudo > /dev/null
 	@if ! grep -q 'tok-sudo:start' $(CLAUDE_MD) 2>/dev/null; then \
 		cat CLAUDE.md >> $(CLAUDE_MD); \
