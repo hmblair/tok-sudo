@@ -12,7 +12,7 @@ Token-gated sudo wrapper. Grants sudo access only when the caller provides a val
 ## Install
 
 ```bash
-./install.sh
+make install
 ```
 
 This copies the scripts to `/usr/local/bin/` and creates a sudoers entry allowing passwordless execution of `tok-sudo-exec` for the current user.
@@ -65,14 +65,12 @@ Generates a new random token and invalidates the old one immediately.
 | `tok-sudo` | `/usr/local/bin/tok-sudo` | User-facing wrapper. Reads token from env, hashes it, pipes to `tok-sudo-exec` |
 | `tok-sudo-exec` | `/usr/local/bin/tok-sudo-exec` | Runs as root via sudoers. Validates hash, executes command |
 | `tok-sudo-rotate` | `/usr/local/bin/tok-sudo-rotate` | Generates new token, stores hash. Must be run with `sudo` |
-| `install.sh` | (repo only) | Installs scripts and configures sudoers |
+| `Makefile` | (repo only) | Installs/uninstalls scripts and configures sudoers |
 
 ## Uninstall
 
 ```bash
-sudo rm /usr/local/bin/tok-sudo /usr/local/bin/tok-sudo-exec /usr/local/bin/tok-sudo-rotate
-sudo rm /etc/sudoers.d/tok-sudo
-sudo rm /etc/tok-sudo-token-hash
+make uninstall
 ```
 
 ## License

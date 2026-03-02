@@ -1,0 +1,24 @@
+PREFIX    ?= /usr/local
+BINDIR    ?= $(PREFIX)/bin
+SUDOERS_D ?= /etc/sudoers.d
+HASH_FILE ?= /etc/tok-sudo-token-hash
+SCRIPTS   := tok-sudo tok-sudo-exec tok-sudo-rotate
+
+.PHONY: install uninstall
+
+install:
+	@for s in $(SCRIPTS); do \
+		sudo cp $$s $(BINDIR)/$$s && \
+		sudo chmod 755 $(BINDIR)/$$s; \
+	done
+	@echo '$(shell id -un) ALL=(root) NOPASSWD: $(BINDIR)/tok-sudo-exec *' \
+		| sudo EDITOR='tee' visudo -f $(SUDOERS_D)/tok-sudo > /dev/null
+	@echo 'tok-sudo installed. Run "sudo tok-sudo-rotate" to set your initial token.'
+
+uninstall:
+	@for s in $(SCRIPTS); do \
+		sudo rm -f $(BINDIR)/$$s; \
+	done
+	@sudo rm -f $(SUDOERS_D)/tok-sudo
+	@sudo rm -f $(HASH_FILE)
+	@echo 'tok-sudo uninstalled.'
