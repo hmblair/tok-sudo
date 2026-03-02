@@ -299,7 +299,21 @@ else
     fail "exec: nonexistent command fails" "expected non-zero exit"
 fi
 
-# B14: exit code propagation
+# B14: world-readable hash file rejected
+echo "$TEST_HASH" > "$HASH_FILE"
+chown root:root "$HASH_FILE"
+chmod 644 "$HASH_FILE"
+run_exec "$TEST_HASH" echo hi
+assert_exec_fails "accessible to non-root" "exec: world-readable hash file rejected"
+
+# B15: group-readable hash file rejected
+chmod 640 "$HASH_FILE"
+run_exec "$TEST_HASH" echo hi
+assert_exec_fails "accessible to non-root" "exec: group-readable hash file rejected"
+# Restore
+chmod 600 "$HASH_FILE"
+
+# B16: exit code propagation
 run_exec "$TEST_HASH" true
 if [[ "$LAST_RC" -eq 0 ]]; then
     pass "exec: exit code 0 from true"
@@ -459,6 +473,64 @@ if [[ $rc -ne 0 ]]; then
     pass "e2e: nonexistent command fails"
 else
     fail "e2e: nonexistent command fails" "expected non-zero exit"
+fi
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Section E: make install correctness
+# ══════════════════════════════════════════════════════════════════════════════
+
+echo ""
+echo -e "${BOLD}── make install ────────────────────────────────────${NC}"
+
+SRCDIR="$(cd "$(dirname "$0")" && pwd)"
+
+if [[ -f "$SRCDIR/Makefile" ]]; then
+    # Run make install from the project directory
+    make -C "$SRCDIR" install >/dev/null 2>&1; rc=$?
+    if [[ $rc -eq 0 ]]; then
+        pass "install: make install succeeds"
+    else
+        fail "install: make install succeeds" "exit $rc"
+    fi
+
+    # E1: sudoers entry contains the real user, not root
+    SUDOERS="/etc/sudoers.d/tok-sudo"
+    if [[ -f "$SUDOERS" ]]; then
+        entry=$(cat "$SUDOERS")
+        if echo "$entry" | grep -q "^${REAL_USER} "; then
+            pass "install: sudoers entry has correct user"
+        else
+            fail "install: sudoers entry has correct user" "got: $entry"
+        fi
+    else
+        fail "install: sudoers entry has correct user" "sudoers file missing"
+    fi
+
+    # E2: installed scripts have VERSION substituted
+    all_clean=true
+    for s in tok-sudo tok-sudo-exec tok-sudo-rotate; do
+        if grep -q '@VERSION@' "/usr/local/bin/$s" 2>/dev/null; then
+            fail "install: $s has VERSION substituted" "still contains @VERSION@"
+            all_clean=false
+        fi
+    done
+    if $all_clean; then
+        pass "install: all scripts have VERSION substituted"
+    fi
+
+    # E3: installed scripts are executable
+    all_exec=true
+    for s in tok-sudo tok-sudo-exec tok-sudo-rotate; do
+        if [[ ! -x "/usr/local/bin/$s" ]]; then
+            fail "install: $s is executable" "not executable"
+            all_exec=false
+        fi
+    done
+    if $all_exec; then
+        pass "install: all scripts are executable"
+    fi
+else
+    echo -e "  ${YELLOW}SKIP${NC}: make install tests (Makefile not found)"
 fi
 
 # (EXIT trap fires: rotates fresh token, prints summary)

@@ -36,6 +36,10 @@ file_owner_uid() {
     stat -c %u "$1" 2>/dev/null || stat -f %u "$1"
 }
 
+file_mode() {
+    stat -c %a "$1" 2>/dev/null || stat -f %Lp "$1"
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
 
 [[ $# -ge 1 ]] || error "missing arguments"
@@ -53,6 +57,8 @@ read -r PROVIDED_HASH
 [[ ! -L "$HASH_FILE" ]] || error "$HASH_FILE is a symlink"
 
 [[ "$(file_owner_uid "$HASH_FILE")" == "0" ]] || error "$HASH_FILE is not owned by root"
+
+[[ "$(file_mode "$HASH_FILE")" == *00 ]] || error "$HASH_FILE is accessible to non-root users (mode $(file_mode "$HASH_FILE"))"
 
 EXPECTED_HASH=$(cat "$HASH_FILE" 2>/dev/null) || error "token not configured. Run: sudo tok-sudo-rotate"
 
