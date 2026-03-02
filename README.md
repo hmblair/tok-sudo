@@ -15,7 +15,7 @@ Token-gated sudo wrapper. Grants sudo access only when the caller provides a val
 make install
 ```
 
-This copies the scripts to `/usr/local/bin/` and creates a sudoers entry allowing passwordless execution of `tok-sudo-exec` for the current user.
+This copies the scripts to `/usr/local/bin/`, creates a sudoers entry allowing passwordless execution of `tok-sudo-exec` for the current user, and appends Claude Code instructions to `~/CLAUDE.md`.
 
 ## Setup
 
@@ -65,6 +65,7 @@ Generates a new random token and invalidates the old one immediately.
 | `tok-sudo` | `/usr/local/bin/tok-sudo` | User-facing wrapper. Reads token from env, hashes it, pipes to `tok-sudo-exec` |
 | `tok-sudo-exec` | `/usr/local/bin/tok-sudo-exec` | Runs as root via sudoers. Validates hash, executes command |
 | `tok-sudo-rotate` | `/usr/local/bin/tok-sudo-rotate` | Generates new token, stores hash. Must be run with `sudo` |
+| `CLAUDE.md` | `~/CLAUDE.md` | Claude Code instructions for using tok-sudo |
 | `Makefile` | (repo only) | Installs/uninstalls scripts and configures sudoers |
 
 ## Uninstall
