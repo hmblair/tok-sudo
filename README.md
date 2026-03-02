@@ -54,6 +54,8 @@ Generates a new random token and invalidates the old one immediately.
 | Token storage | SHA-256 hash in `/etc/tok-sudo-token-hash`, mode `0600`, owned by root |
 | Token transport | Via `TOK_SUDO_TOKEN` env var (not visible in `ps`) |
 | Hash transport | Via stdin to `tok-sudo-exec` (not visible in `ps`) |
+| Hash comparison | Timing-safe — both hashes are re-hashed with a random nonce before comparison |
+| Ownership check | Hash file must be owned by root (UID 0) or execution is refused |
 | Sudoers scope | `NOPASSWD` only for `tok-sudo-exec`, not general sudo |
 | Empty token | Rejected — an empty or cleared hash file means no access |
 | Token entropy | 32 alphanumeric characters (~190 bits) |
