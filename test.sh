@@ -219,12 +219,12 @@ chmod 600 "$HASH_FILE"
 run_exec "somehash" echo hi
 assert_exec_fails "token not configured" "exec: hash file empty"
 
-# B7: wrong hash rejected
-echo "correcthash" > "$HASH_FILE"
+# B7: malformed hash rejected
+echo "not-a-valid-hash" > "$HASH_FILE"
 chown 0:0 "$HASH_FILE"
 chmod 600 "$HASH_FILE"
 run_exec "wronghash" echo hi
-assert_exec_fails "invalid token" "exec: wrong hash rejected"
+assert_exec_fails "malformed" "exec: malformed hash rejected"
 
 # B8: correct hash accepted
 TEST_TOKEN="testtoken123"
