@@ -28,7 +28,7 @@ HASH_FILE="/etc/tok-sudo-token-hash"
 
 TOKEN=$(head -c 128 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
 
-echo -n "$TOKEN" | sha256sum | cut -d' ' -f1 > "$HASH_FILE"
+echo -n "$TOKEN" | { sha256sum 2>/dev/null || shasum -a 256; } | cut -d' ' -f1 > "$HASH_FILE"
 chmod 600 "$HASH_FILE"
 
 success "New tok-sudo token: $TOKEN"

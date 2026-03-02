@@ -28,5 +28,5 @@ usage() {
 [[ -n "${TOK_SUDO_TOKEN:-}" ]] || usage 1
 [[ $# -ge 1 ]]                || usage 1
 
-HASH=$(echo -n "$TOK_SUDO_TOKEN" | sha256sum | cut -d' ' -f1)
+HASH=$(echo -n "$TOK_SUDO_TOKEN" | { sha256sum 2>/dev/null || shasum -a 256; } | cut -d' ' -f1)
 echo "$HASH" | sudo /usr/local/bin/tok-sudo-exec "$@"
