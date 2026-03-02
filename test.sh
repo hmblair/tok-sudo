@@ -1,0 +1,354 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ══════════════════════════════════════════════════════════════════════════════
+# tok-sudo integration tests
+#
+# WARNING: This script OVERWRITES /etc/tok-sudo-token-hash.
+#          Any existing tok-sudo token will be destroyed.
+#          A new token is generated at the end and printed to stdout.
+#
+# Usage: sudo ./test.sh
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── ANSI colours ──────────────────────────────────────────────────────────────
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+# ── Constants ─────────────────────────────────────────────────────────────────
+
+HASH_FILE="/etc/tok-sudo-token-hash"
+EXEC="/usr/local/bin/tok-sudo-exec"
+ROTATE="/usr/local/bin/tok-sudo-rotate"
+CLI="/usr/local/bin/tok-sudo"
+REAL_USER="${SUDO_USER:-$(whoami)}"
+
+PASS=0
+FAIL=0
+
+# ── Preamble checks ──────────────────────────────────────────────────────────
+
+[[ "$(id -u)" -eq 0 ]] || { echo "Must run as root: sudo ./test.sh"; exit 1; }
+[[ -x "$EXEC" ]]       || { echo "tok-sudo-exec not installed at $EXEC"; exit 1; }
+[[ -x "$ROTATE" ]]     || { echo "tok-sudo-rotate not installed at $ROTATE"; exit 1; }
+[[ -x "$CLI" ]]        || { echo "tok-sudo not installed at $CLI"; exit 1; }
+
+echo ""
+echo -e "${BOLD}tok-sudo integration tests${NC}"
+echo -e "${RED}WARNING: This will overwrite $HASH_FILE${NC}"
+echo ""
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+pass() {
+    PASS=$((PASS + 1))
+    echo -e "  ${GREEN}PASS${NC}: $1"
+}
+
+fail() {
+    FAIL=$((FAIL + 1))
+    echo -e "  ${RED}FAIL${NC}: $1"
+    [[ -z "${2:-}" ]] || echo "        $2"
+}
+
+sha256() {
+    echo -n "$1" | { sha256sum 2>/dev/null || shasum -a 256; } | cut -d' ' -f1
+}
+
+strip_ansi() {
+    sed 's/\x1b\[[0-9;]*m//g'
+}
+
+# Run tok-sudo-exec with a hash piped to stdin.
+# Sets: LAST_RC, LAST_STDOUT, LAST_STDERR
+run_exec() {
+    local hash="$1"; shift
+    local tmpout tmperr
+    tmpout=$(mktemp)
+    tmperr=$(mktemp)
+    LAST_RC=0
+    echo "$hash" | "$EXEC" "$@" >"$tmpout" 2>"$tmperr" || LAST_RC=$?
+    LAST_STDOUT=$(cat "$tmpout")
+    LAST_STDERR=$(cat "$tmperr")
+    rm -f "$tmpout" "$tmperr"
+}
+
+assert_exec_fails() {
+    local substring="$1" name="$2"
+    if [[ "$LAST_RC" -eq 0 ]]; then
+        fail "$name" "expected non-zero exit, got 0"
+    elif echo "$LAST_STDERR" | grep -q "$substring"; then
+        pass "$name"
+    else
+        fail "$name" "stderr missing '$substring': $(echo "$LAST_STDERR" | strip_ansi)"
+    fi
+}
+
+assert_exec_succeeds() {
+    local name="$1"
+    if [[ "$LAST_RC" -ne 0 ]]; then
+        fail "$name" "expected exit 0, got $LAST_RC: $(echo "$LAST_STDERR" | strip_ansi)"
+    else
+        pass "$name"
+    fi
+}
+
+# ── Cleanup trap ──────────────────────────────────────────────────────────────
+
+cleanup() {
+    echo ""
+    echo -e "${BOLD}── cleanup ─────────────────────────────────────────${NC}"
+    local raw token
+    raw=$("$ROTATE" 2>&1) || true
+    token=$(echo "$raw" | strip_ansi | grep -o '[a-zA-Z0-9]\{32\}$' || echo "(could not extract)")
+    echo "  New token: $token"
+    echo ""
+    echo -e "${BOLD}── results ─────────────────────────────────────────${NC}"
+    echo -e "  ${GREEN}$PASS passed${NC}, ${RED}$FAIL failed${NC}"
+    if [[ "$FAIL" -gt 0 ]]; then
+        exit 1
+    fi
+}
+trap cleanup EXIT
+
+# ── Disable errexit for test body ─────────────────────────────────────────────
+
+set +e
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Section A: tok-sudo CLI argument parsing
+# ══════════════════════════════════════════════════════════════════════════════
+
+echo -e "${BOLD}── tok-sudo CLI ────────────────────────────────────${NC}"
+
+# A1: --help exits 0
+out=$(sudo -u "$REAL_USER" "$CLI" --help 2>&1); rc=$?
+if [[ $rc -eq 0 ]] && echo "$out" | grep -q "Usage"; then
+    pass "cli: --help exits 0"
+else
+    fail "cli: --help exits 0" "rc=$rc"
+fi
+
+# A2: -h exits 0
+out=$(sudo -u "$REAL_USER" "$CLI" -h 2>&1); rc=$?
+if [[ $rc -eq 0 ]] && echo "$out" | grep -q "Usage"; then
+    pass "cli: -h exits 0"
+else
+    fail "cli: -h exits 0" "rc=$rc"
+fi
+
+# A3: --version exits 0
+out=$(sudo -u "$REAL_USER" "$CLI" --version 2>&1); rc=$?
+if [[ $rc -eq 0 ]] && echo "$out" | grep -q "tok-sudo"; then
+    pass "cli: --version exits 0"
+else
+    fail "cli: --version exits 0" "rc=$rc"
+fi
+
+# A4: -v exits 0
+out=$(sudo -u "$REAL_USER" "$CLI" -v 2>&1); rc=$?
+if [[ $rc -eq 0 ]] && echo "$out" | grep -q "tok-sudo"; then
+    pass "cli: -v exits 0"
+else
+    fail "cli: -v exits 0" "rc=$rc"
+fi
+
+# A5: no token, no args exits 1
+out=$(sudo -u "$REAL_USER" env -u TOK_SUDO_TOKEN "$CLI" 2>&1); rc=$?
+if [[ $rc -ne 0 ]] && echo "$out" | grep -q "Usage"; then
+    pass "cli: no token no args exits 1"
+else
+    fail "cli: no token no args exits 1" "rc=$rc"
+fi
+
+# A6: token set but no command exits 1
+out=$(sudo -u "$REAL_USER" env TOK_SUDO_TOKEN=x "$CLI" 2>&1); rc=$?
+if [[ $rc -ne 0 ]] && echo "$out" | grep -q "Usage"; then
+    pass "cli: token but no command exits 1"
+else
+    fail "cli: token but no command exits 1" "rc=$rc"
+fi
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Section B: tok-sudo-exec security validation
+# ══════════════════════════════════════════════════════════════════════════════
+
+echo ""
+echo -e "${BOLD}── tok-sudo-exec validation ────────────────────────${NC}"
+
+# B1: no arguments
+run_exec "x"
+assert_exec_fails "missing arguments" "exec: no arguments"
+
+# B2: TTY stdin rejected
+if command -v script >/dev/null 2>&1; then
+    out=$(script -qec "$EXEC echo hi" /dev/null 2>&1) || true
+    if echo "$out" | grep -q "internal command"; then
+        pass "exec: TTY stdin rejected"
+    else
+        fail "exec: TTY stdin rejected" "output: $(echo "$out" | strip_ansi | head -1)"
+    fi
+else
+    echo -e "  ${YELLOW}SKIP${NC}: exec: TTY stdin rejected (script not found)"
+fi
+
+# B3: empty hash rejected
+run_exec "" echo hi
+assert_exec_fails "empty token" "exec: empty hash rejected"
+
+# B4: hash file missing
+rm -f "$HASH_FILE"
+run_exec "somehash" echo hi
+assert_exec_fails "token not configured" "exec: hash file missing"
+
+# B5: hash file not owned by root
+echo "fakehash" > "$HASH_FILE"
+chown 65534 "$HASH_FILE"
+chmod 600 "$HASH_FILE"
+run_exec "somehash" echo hi
+assert_exec_fails "not owned by root" "exec: hash file not owned by root"
+
+# B6: hash file empty
+: > "$HASH_FILE"
+chown root:root "$HASH_FILE"
+chmod 600 "$HASH_FILE"
+run_exec "somehash" echo hi
+assert_exec_fails "token not configured" "exec: hash file empty"
+
+# B7: wrong hash rejected
+echo "correcthash" > "$HASH_FILE"
+chown root:root "$HASH_FILE"
+chmod 600 "$HASH_FILE"
+run_exec "wronghash" echo hi
+assert_exec_fails "invalid token" "exec: wrong hash rejected"
+
+# B8: correct hash accepted
+TEST_TOKEN="testtoken123"
+TEST_HASH=$(sha256 "$TEST_TOKEN")
+echo "$TEST_HASH" > "$HASH_FILE"
+chown root:root "$HASH_FILE"
+chmod 600 "$HASH_FILE"
+run_exec "$TEST_HASH" echo hi
+assert_exec_succeeds "exec: correct hash accepted"
+if [[ "$LAST_STDOUT" == "hi" ]]; then
+    pass "exec: correct hash stdout"
+else
+    fail "exec: correct hash stdout" "expected 'hi', got '$LAST_STDOUT'"
+fi
+
+# B9: multi-arg passthrough
+run_exec "$TEST_HASH" echo hello world
+assert_exec_succeeds "exec: multi-arg passthrough"
+if [[ "$LAST_STDOUT" == "hello world" ]]; then
+    pass "exec: multi-arg stdout"
+else
+    fail "exec: multi-arg stdout" "expected 'hello world', got '$LAST_STDOUT'"
+fi
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Section C: tok-sudo-rotate
+# ══════════════════════════════════════════════════════════════════════════════
+
+echo ""
+echo -e "${BOLD}── tok-sudo-rotate ─────────────────────────────────${NC}"
+
+# C1: non-root rejected
+out=$(sudo -u nobody "$ROTATE" 2>&1); rc=$?
+if [[ $rc -ne 0 ]] && echo "$out" | grep -q "must be run as root"; then
+    pass "rotate: non-root rejected"
+else
+    fail "rotate: non-root rejected" "rc=$rc"
+fi
+
+# C2: --help exits 0
+out=$("$ROTATE" --help 2>&1); rc=$?
+if [[ $rc -eq 0 ]] && echo "$out" | grep -q "Usage"; then
+    pass "rotate: --help exits 0"
+else
+    fail "rotate: --help exits 0" "rc=$rc"
+fi
+
+# C3: -v exits 0
+out=$("$ROTATE" -v 2>&1); rc=$?
+if [[ $rc -eq 0 ]] && echo "$out" | grep -q "tok-sudo-rotate"; then
+    pass "rotate: -v exits 0"
+else
+    fail "rotate: -v exits 0" "rc=$rc"
+fi
+
+# C4: produces 32-char alphanumeric token
+raw=$("$ROTATE" 2>&1); rc=$?
+ROTATE_TOKEN=$(echo "$raw" | strip_ansi | grep -o '[a-zA-Z0-9]\{32\}$')
+if [[ $rc -eq 0 ]] && [[ ${#ROTATE_TOKEN} -eq 32 ]]; then
+    pass "rotate: produces 32-char token"
+else
+    fail "rotate: produces 32-char token" "rc=$rc, token='$ROTATE_TOKEN'"
+fi
+
+# C5: hash file permissions
+if [[ -f "$HASH_FILE" ]]; then
+    perms=$(stat -c %a "$HASH_FILE" 2>/dev/null || stat -f %Lp "$HASH_FILE")
+    owner=$(stat -c %u "$HASH_FILE" 2>/dev/null || stat -f %u "$HASH_FILE")
+    if [[ "$perms" == "600" ]] && [[ "$owner" == "0" ]]; then
+        pass "rotate: hash file perms 600, owned by root"
+    else
+        fail "rotate: hash file perms 600, owned by root" "perms=$perms, owner=$owner"
+    fi
+else
+    fail "rotate: hash file perms 600, owned by root" "hash file does not exist"
+fi
+
+# C6: stored hash matches token
+if [[ -n "$ROTATE_TOKEN" ]]; then
+    expected=$(sha256 "$ROTATE_TOKEN")
+    stored=$(cat "$HASH_FILE")
+    if [[ "$expected" == "$stored" ]]; then
+        pass "rotate: stored hash matches token"
+    else
+        fail "rotate: stored hash matches token" "expected=$expected, stored=$stored"
+    fi
+else
+    fail "rotate: stored hash matches token" "no token from C4"
+fi
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Section D: end-to-end flow
+# ══════════════════════════════════════════════════════════════════════════════
+
+echo ""
+echo -e "${BOLD}── end-to-end ──────────────────────────────────────${NC}"
+
+# D1: rotate then tok-sudo succeeds
+raw=$("$ROTATE" 2>&1)
+TOKEN_D1=$(echo "$raw" | strip_ansi | grep -o '[a-zA-Z0-9]\{32\}$')
+out=$(sudo -u "$REAL_USER" env "TOK_SUDO_TOKEN=$TOKEN_D1" "$CLI" echo e2e-test 2>&1); rc=$?
+if [[ $rc -eq 0 ]] && echo "$out" | grep -q "e2e-test"; then
+    pass "e2e: rotate then tok-sudo succeeds"
+else
+    fail "e2e: rotate then tok-sudo succeeds" "rc=$rc, out=$(echo "$out" | strip_ansi)"
+fi
+
+# D2: old token rejected after re-rotate
+OLD_TOKEN="$TOKEN_D1"
+raw=$("$ROTATE" 2>&1)
+TOKEN_D2=$(echo "$raw" | strip_ansi | grep -o '[a-zA-Z0-9]\{32\}$')
+out=$(sudo -u "$REAL_USER" env "TOK_SUDO_TOKEN=$OLD_TOKEN" "$CLI" echo should-fail 2>&1); rc=$?
+if [[ $rc -ne 0 ]] && echo "$out" | grep -q "invalid token"; then
+    pass "e2e: old token rejected after rotate"
+else
+    fail "e2e: old token rejected after rotate" "rc=$rc, out=$(echo "$out" | strip_ansi)"
+fi
+
+# D3: new token works after re-rotate
+out=$(sudo -u "$REAL_USER" env "TOK_SUDO_TOKEN=$TOKEN_D2" "$CLI" echo should-pass 2>&1); rc=$?
+if [[ $rc -eq 0 ]] && echo "$out" | grep -q "should-pass"; then
+    pass "e2e: new token works after rotate"
+else
+    fail "e2e: new token works after rotate" "rc=$rc, out=$(echo "$out" | strip_ansi)"
+fi
+
+# (EXIT trap fires: rotates fresh token, prints summary)
