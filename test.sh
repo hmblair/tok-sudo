@@ -186,7 +186,11 @@ assert_exec_fails "missing arguments" "exec: no arguments"
 
 # B2: TTY stdin rejected
 if command -v script >/dev/null 2>&1; then
-    out=$(script -qec "$EXEC echo hi" /dev/null 2>&1) || true
+    if [[ "$(uname)" == "Darwin" ]]; then
+        out=$(script -q /dev/null "$EXEC" echo hi 2>&1) || true
+    else
+        out=$(script -qec "$EXEC echo hi" /dev/null 2>&1) || true
+    fi
     if echo "$out" | grep -q "internal command"; then
         pass "exec: TTY stdin rejected"
     else
