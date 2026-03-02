@@ -43,7 +43,7 @@ sudo chmod 755 /usr/local/bin/tok-sudo-rotate
 
 # Set up sudoers (only tok-sudo-exec gets NOPASSWD)
 info "Configuring sudoers..."
-SUDOERS_LINE="$USER ALL=(root) NOPASSWD: /usr/local/bin/tok-sudo-exec *"
+SUDOERS_LINE="$(id -un) ALL=(root) NOPASSWD: /usr/local/bin/tok-sudo-exec *"
 echo "$SUDOERS_LINE" | sudo EDITOR='tee' visudo -f /etc/sudoers.d/tok-sudo > /dev/null
 
 success "tok-sudo installed successfully."

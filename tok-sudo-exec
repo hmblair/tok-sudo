@@ -5,6 +5,8 @@ set -euo pipefail
 
 # ─────────────────────────────────────────────────────────────────────────────
 
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
 HASH_FILE="/etc/tok-sudo-token-hash"
 
 [[ $# -ge 1 ]] || { echo "tok-sudo-exec: missing arguments" >&2; exit 1; }
