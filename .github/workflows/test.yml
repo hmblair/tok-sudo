@@ -12,9 +12,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install tok-sudo
+        run: |
+          sudo make install
+
       - name: Run tests
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -qq -y openssl
-          chmod +x test.sh
           sudo ./test.sh
