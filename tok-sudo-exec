@@ -1,0 +1,35 @@
+#!/bin/bash
+# tok-sudo-exec - internal script, runs as root via sudoers NOPASSWD
+# Validates token hash against /etc/tok-sudo-token-hash, then executes the command
+set -euo pipefail
+
+HASH_FILE="/etc/tok-sudo-token-hash"
+
+if [ $# -lt 1 ]; then
+    echo "tok-sudo-exec: missing arguments" >&2
+    exit 1
+fi
+
+read -r PROVIDED_HASH
+
+if [ -z "$PROVIDED_HASH" ]; then
+    echo "tok-sudo: empty token" >&2
+    exit 1
+fi
+
+EXPECTED_HASH=$(cat "$HASH_FILE" 2>/dev/null) || {
+    echo "tok-sudo: token not configured. Run: sudo tok-sudo-rotate" >&2
+    exit 1
+}
+
+if [ -z "$EXPECTED_HASH" ]; then
+    echo "tok-sudo: token not configured. Run: sudo tok-sudo-rotate" >&2
+    exit 1
+fi
+
+if [ "$PROVIDED_HASH" = "$EXPECTED_HASH" ]; then
+    exec "$@"
+else
+    echo "tok-sudo: invalid token" >&2
+    exit 1
+fi

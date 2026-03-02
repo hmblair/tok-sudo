@@ -1,0 +1,17 @@
+#!/bin/bash
+# tok-sudo-rotate - set or rotate the tok-sudo token
+# Must be run with sudo
+set -euo pipefail
+
+HASH_FILE="/etc/tok-sudo-token-hash"
+
+if [ "$(id -u)" -ne 0 ]; then
+    echo "tok-sudo-rotate must be run as root (use sudo)" >&2
+    exit 1
+fi
+
+TOKEN=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
+
+echo -n "$TOKEN" | sha256sum | cut -d' ' -f1 > "$HASH_FILE"
+chmod 600 "$HASH_FILE"
+echo "New tok-sudo token: $TOKEN"

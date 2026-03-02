@@ -1,0 +1,17 @@
+#!/bin/bash
+# tok-sudo - token-gated sudo wrapper
+# Usage: TOK_SUDO_TOKEN=<token> tok-sudo <command...>
+set -euo pipefail
+
+if [ -z "${TOK_SUDO_TOKEN:-}" ]; then
+    echo "Usage: TOK_SUDO_TOKEN=<token> tok-sudo <command...>" >&2
+    exit 1
+fi
+
+if [ $# -lt 1 ]; then
+    echo "Usage: TOK_SUDO_TOKEN=<token> tok-sudo <command...>" >&2
+    exit 1
+fi
+
+HASH=$(echo -n "$TOK_SUDO_TOKEN" | sha256sum | cut -d' ' -f1)
+echo "$HASH" | sudo /usr/local/bin/tok-sudo-exec "$@"
