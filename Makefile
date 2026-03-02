@@ -10,8 +10,9 @@ CLAUDE_MD ?= $(HOME)/CLAUDE.md
 
 install:
 	@for s in $(SCRIPTS); do \
-		sudo sed 's/@VERSION@/$(VERSION)/g' $$s > /tmp/tok-sudo-$$s && \
-		sudo mv /tmp/tok-sudo-$$s $(BINDIR)/$$s && \
+		TMPFILE=$$(mktemp) && \
+		sudo sed 's/@VERSION@/$(VERSION)/g' $$s > "$$TMPFILE" && \
+		sudo mv "$$TMPFILE" $(BINDIR)/$$s && \
 		sudo chmod 755 $(BINDIR)/$$s; \
 	done
 	@echo "$${SUDO_USER:-$(shell id -un)} ALL=(root) NOPASSWD: $(BINDIR)/tok-sudo-exec *" \
