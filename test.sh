@@ -331,6 +331,14 @@ else
     fail "exec: exit code 1 from false" "got $LAST_RC"
 fi
 
+# B17: tok-sudo-rotate blocked through tok-sudo-exec
+run_exec "$TEST_HASH" tok-sudo-rotate
+assert_exec_fails "tok-sudo-rotate cannot be run through tok-sudo" "exec: tok-sudo-rotate blocked"
+
+# B18: tok-sudo-rotate blocked via absolute path
+run_exec "$TEST_HASH" /usr/local/bin/tok-sudo-rotate
+assert_exec_fails "tok-sudo-rotate cannot be run through tok-sudo" "exec: tok-sudo-rotate blocked (absolute path)"
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Section C: tok-sudo-rotate
 # ══════════════════════════════════════════════════════════════════════════════

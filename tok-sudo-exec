@@ -70,6 +70,8 @@ EXPECTED_HASH=$(cat "$HASH_FILE" 2>/dev/null) || error "token not configured. Ru
 # the final string comparison leaks no information about the actual hashes.
 NONCE=$(head -c 16 /dev/urandom | od -A n -t x1 | tr -d ' \n')
 if [[ "$(sha256 "${NONCE}${PROVIDED_HASH}")" == "$(sha256 "${NONCE}${EXPECTED_HASH}")" ]]; then
+    # Block self-rotation: prevent agents from rotating their own token
+    [[ "$(basename "$1")" != "tok-sudo-rotate" ]] || error "tok-sudo-rotate cannot be run through tok-sudo"
     exec "$@"
 else
     error "invalid token"
