@@ -1,17 +1,34 @@
-#!/bin/bash
-# tok-sudo-rotate - set or rotate the tok-sudo token
-# Must be run with sudo
+#!/usr/bin/env bash
 set -euo pipefail
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ANSI colour tokens
+
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Output helpers
+
+error() {
+    echo -e "${RED}Error:${NC} $1" >&2
+    exit 1
+}
+
+success() {
+    echo -e "${GREEN}$1${NC}"
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 
 HASH_FILE="/etc/tok-sudo-token-hash"
 
-if [ "$(id -u)" -ne 0 ]; then
-    echo "tok-sudo-rotate must be run as root (use sudo)" >&2
-    exit 1
-fi
+[[ "$(id -u)" -eq 0 ]] || error "tok-sudo-rotate must be run as root (use sudo)"
 
 TOKEN=$(head -c 128 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
 
 echo -n "$TOKEN" | sha256sum | cut -d' ' -f1 > "$HASH_FILE"
 chmod 600 "$HASH_FILE"
-echo "New tok-sudo token: $TOKEN"
+
+success "New tok-sudo token: $TOKEN"

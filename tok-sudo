@@ -1,17 +1,32 @@
-#!/bin/bash
-# tok-sudo - token-gated sudo wrapper
-# Usage: TOK_SUDO_TOKEN=<token> tok-sudo <command...>
+#!/usr/bin/env bash
 set -euo pipefail
 
-if [ -z "${TOK_SUDO_TOKEN:-}" ]; then
-    echo "Usage: TOK_SUDO_TOKEN=<token> tok-sudo <command...>" >&2
-    exit 1
-fi
+# ─────────────────────────────────────────────────────────────────────────────
+# ANSI colour tokens
 
-if [ $# -lt 1 ]; then
-    echo "Usage: TOK_SUDO_TOKEN=<token> tok-sudo <command...>" >&2
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BOLD='\033[1;37m'
+NC='\033[0m'
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Output helpers
+
+error() {
+    echo -e "${RED}Error:${NC} $1" >&2
     exit 1
-fi
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+
+usage() {
+    echo -e "${BOLD}Usage:${NC}"
+    echo -e "  TOK_SUDO_TOKEN=<token> tok-sudo <command...>"
+    exit "${1:-0}"
+}
+
+[[ -n "${TOK_SUDO_TOKEN:-}" ]] || usage 1
+[[ $# -ge 1 ]]                || usage 1
 
 HASH=$(echo -n "$TOK_SUDO_TOKEN" | sha256sum | cut -d' ' -f1)
 echo "$HASH" | sudo /usr/local/bin/tok-sudo-exec "$@"
