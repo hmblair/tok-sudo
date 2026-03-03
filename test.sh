@@ -477,10 +477,40 @@ else
     fail "e2e: token with shell metacharacters" "rc=$rc, out=$(echo "$out" | strip_ansi)"
 fi
 
-# D7: nonexistent command through tok-sudo
+# D7: stdin passthrough
 raw=$("$ROTATE" 2>&1)
 TOKEN_D7=$(echo "$raw" | strip_ansi | grep -o '[a-zA-Z0-9]\{32\}$')
-out=$(sudo -u "$REAL_USER" env "TOK_SUDO_TOKEN=$TOKEN_D7" "$CLI" /usr/bin/this-does-not-exist-xyz 2>&1); rc=$?
+out=$(echo "stdin-content" | sudo -u "$REAL_USER" env "TOK_SUDO_TOKEN=$TOKEN_D7" "$CLI" cat 2>&1); rc=$?
+if [[ $rc -eq 0 ]] && [[ "$out" == "stdin-content" ]]; then
+    pass "e2e: stdin passthrough"
+else
+    fail "e2e: stdin passthrough" "rc=$rc, out='$(echo "$out" | strip_ansi)'"
+fi
+
+# D8: stdin passthrough with multiple lines
+out=$(printf 'line1\nline2\nline3' | sudo -u "$REAL_USER" env "TOK_SUDO_TOKEN=$TOKEN_D7" "$CLI" cat 2>&1); rc=$?
+expected=$(printf 'line1\nline2\nline3')
+if [[ $rc -eq 0 ]] && [[ "$out" == "$expected" ]]; then
+    pass "e2e: stdin passthrough multi-line"
+else
+    fail "e2e: stdin passthrough multi-line" "rc=$rc, out='$(echo "$out" | strip_ansi)'"
+fi
+
+# D9: stdin passthrough with tee
+TEETMP=$(mktemp)
+echo "tee-content" | sudo -u "$REAL_USER" env "TOK_SUDO_TOKEN=$TOKEN_D7" "$CLI" tee "$TEETMP" >/dev/null 2>&1; rc=$?
+tee_got=$(cat "$TEETMP")
+rm -f "$TEETMP"
+if [[ $rc -eq 0 ]] && [[ "$tee_got" == "tee-content" ]]; then
+    pass "e2e: stdin passthrough with tee"
+else
+    fail "e2e: stdin passthrough with tee" "rc=$rc, file='$tee_got'"
+fi
+
+# D10: nonexistent command through tok-sudo
+raw=$("$ROTATE" 2>&1)
+TOKEN_D10=$(echo "$raw" | strip_ansi | grep -o '[a-zA-Z0-9]\{32\}$')
+out=$(sudo -u "$REAL_USER" env "TOK_SUDO_TOKEN=$TOKEN_D10" "$CLI" /usr/bin/this-does-not-exist-xyz 2>&1); rc=$?
 if [[ $rc -ne 0 ]]; then
     pass "e2e: nonexistent command fails"
 else
