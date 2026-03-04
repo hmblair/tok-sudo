@@ -39,6 +39,12 @@ For example:
 TOK_SUDO_TOKEN=abc123 tok-sudo apt install htop
 ```
 
+Piped stdin is passed through to the command, so patterns like this work:
+
+```bash
+echo "nameserver 1.1.1.1" | TOK_SUDO_TOKEN=abc123 tok-sudo tee /etc/resolv.conf
+```
+
 ## Rotating / revoking
 
 ```bash

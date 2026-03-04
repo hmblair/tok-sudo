@@ -11,7 +11,7 @@ CLAUDE_MD ?= $(HOME)/CLAUDE.md
 install:
 	@for s in $(SCRIPTS); do \
 		TMPFILE=$$(mktemp) && \
-		sudo sed 's/@VERSION@/$(VERSION)/g' $$s > "$$TMPFILE" && \
+		sed 's/@VERSION@/$(VERSION)/g' $$s > "$$TMPFILE" && \
 		sudo mv "$$TMPFILE" $(BINDIR)/$$s && \
 		sudo chmod 755 $(BINDIR)/$$s; \
 	done

@@ -204,30 +204,34 @@ fi
 run_exec "" echo hi
 assert_exec_fails "empty token" "exec: empty hash rejected"
 
+# B3.5: non-hex hash rejected
+run_exec "not-a-valid-hex-string" echo hi
+assert_exec_fails "invalid token" "exec: non-hex hash rejected"
+
 # B4: hash file missing
 rm -f "$HASH_FILE"
-run_exec "somehash" echo hi
+run_exec "$(sha256 somehash)" echo hi
 assert_exec_fails "token not configured" "exec: hash file missing"
 
 # B5: hash file not owned by root
 echo "fakehash" > "$HASH_FILE"
 chown nobody "$HASH_FILE" 2>/dev/null || chown 65534 "$HASH_FILE"
 chmod 600 "$HASH_FILE"
-run_exec "somehash" echo hi
+run_exec "$(sha256 somehash)" echo hi
 assert_exec_fails "not owned by root" "exec: hash file not owned by root"
 
 # B6: hash file empty
 : > "$HASH_FILE"
 chown 0:0 "$HASH_FILE"
 chmod 600 "$HASH_FILE"
-run_exec "somehash" echo hi
+run_exec "$(sha256 somehash)" echo hi
 assert_exec_fails "token not configured" "exec: hash file empty"
 
 # B7: malformed hash rejected
 echo "not-a-valid-hash" > "$HASH_FILE"
 chown 0:0 "$HASH_FILE"
 chmod 600 "$HASH_FILE"
-run_exec "wronghash" echo hi
+run_exec "$(sha256 wronghash)" echo hi
 assert_exec_fails "malformed" "exec: malformed hash rejected"
 
 # B8: correct hash accepted
