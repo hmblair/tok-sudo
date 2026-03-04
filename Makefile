@@ -17,10 +17,12 @@ install:
 	done
 	@echo "$${SUDO_USER:-$(shell id -un)} ALL=(root) NOPASSWD: $(BINDIR)/tok-sudo-exec *" \
 		| sudo EDITOR='tee' visudo -f $(SUDOERS_D)/tok-sudo > /dev/null
-	@if ! grep -q 'tok-sudo:start' $(CLAUDE_MD) 2>/dev/null; then \
-		cat CLAUDE.md >> $(CLAUDE_MD); \
-		echo 'Added tok-sudo instructions to $(CLAUDE_MD)'; \
+	@if grep -q 'tok-sudo:start' $(CLAUDE_MD) 2>/dev/null; then \
+		sed '/tok-sudo:start/,/tok-sudo:end/d' $(CLAUDE_MD) > $(CLAUDE_MD).tmp && \
+		mv $(CLAUDE_MD).tmp $(CLAUDE_MD); \
 	fi
+	@cat CLAUDE.md >> $(CLAUDE_MD)
+	@echo 'Updated tok-sudo instructions in $(CLAUDE_MD)'
 	@echo 'tok-sudo installed. Run "sudo tok-sudo-rotate" to set your initial token.'
 
 uninstall:
