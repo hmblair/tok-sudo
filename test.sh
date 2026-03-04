@@ -575,6 +575,37 @@ if [[ -f "$SRCDIR/Makefile" ]]; then
     if $all_exec; then
         pass "install: all scripts are executable"
     fi
+    # E4: fresh CLAUDE.md append
+    TEST_CLAUDE=$(mktemp)
+    echo "# Existing content" > "$TEST_CLAUDE"
+    make -C "$SRCDIR" install CLAUDE_MD="$TEST_CLAUDE" >/dev/null 2>&1
+    if grep -q 'tok-sudo:start' "$TEST_CLAUDE" && grep -q 'tok-sudo:end' "$TEST_CLAUDE" \
+        && grep -q '# Existing content' "$TEST_CLAUDE"; then
+        pass "install: CLAUDE.md fresh append"
+    else
+        fail "install: CLAUDE.md fresh append" "content: $(cat "$TEST_CLAUDE")"
+    fi
+
+    # E5: CLAUDE.md update replaces old block
+    make -C "$SRCDIR" install CLAUDE_MD="$TEST_CLAUDE" >/dev/null 2>&1
+    count=$(grep -c 'tok-sudo:start' "$TEST_CLAUDE")
+    if [[ "$count" -eq 1 ]] && grep -q '# Existing content' "$TEST_CLAUDE"; then
+        pass "install: CLAUDE.md update replaces old block"
+    else
+        fail "install: CLAUDE.md update replaces old block" "tok-sudo:start count=$count"
+    fi
+
+    # E6: uninstall removes CLAUDE.md block
+    make -C "$SRCDIR" uninstall CLAUDE_MD="$TEST_CLAUDE" >/dev/null 2>&1
+    if ! grep -q 'tok-sudo:start' "$TEST_CLAUDE" && grep -q '# Existing content' "$TEST_CLAUDE"; then
+        pass "install: uninstall removes CLAUDE.md block"
+    else
+        fail "install: uninstall removes CLAUDE.md block" "content: $(cat "$TEST_CLAUDE")"
+    fi
+    rm -f "$TEST_CLAUDE"
+
+    # Reinstall so subsequent tests and cleanup work
+    make -C "$SRCDIR" install >/dev/null 2>&1
 else
     echo -e "  ${YELLOW}SKIP${NC}: make install tests (Makefile not found)"
 fi
