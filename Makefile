@@ -22,7 +22,7 @@ install:
 		mv $(CLAUDE_MD).tmp $(CLAUDE_MD); \
 	fi
 	@cat CLAUDE.md >> $(CLAUDE_MD)
-	@chown $${SUDO_USER:-$(shell id -un)}:$${SUDO_USER:-$(shell id -un)} $(CLAUDE_MD)
+	@chown $${SUDO_USER:-$(shell id -un)} $(CLAUDE_MD)
 	@echo 'Updated tok-sudo instructions in $(CLAUDE_MD)'
 	@echo 'tok-sudo installed. Run "sudo tok-sudo-rotate" to set your initial token.'
 
@@ -35,6 +35,6 @@ uninstall:
 	@if [ -f $(CLAUDE_MD) ]; then \
 		sed '/tok-sudo:start/,/tok-sudo:end/d' $(CLAUDE_MD) > $(CLAUDE_MD).tmp && \
 		mv $(CLAUDE_MD).tmp $(CLAUDE_MD) && \
-		chown $${SUDO_USER:-$(shell id -un)}:$${SUDO_USER:-$(shell id -un)} $(CLAUDE_MD); \
+		chown $${SUDO_USER:-$(shell id -un)} $(CLAUDE_MD); \
 	fi
 	@echo 'tok-sudo uninstalled.'
